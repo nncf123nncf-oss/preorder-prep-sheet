@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>予約注文まとめ表｜届いた注文文から製造数と受け渡し表を作る</title>
-<meta name="description" content="届いた予約注文の文章をまとめて貼り付けると、品目ごとの製造数と、受け取り時刻順の受け渡し表が出ます。拾えなかった注文は確認欄に原文のまま残ります。貼り付けた文章はブラウザ内だけで処理し、送信しません。ログイン不要の無料ツールです。">
+<meta name="description" content="届いた予約注文の文章をまとめて貼り付けると、品目ごとの製造数と、受け取り時刻順の受け渡し表が出ます。読み取れなかった部分がある注文には「要確認」が付き、確認欄で原文を見ながら直せます。貼り付けた文章はブラウザ内だけで処理し、送信しません。ログイン不要の無料ツールです。">
 <style>
   :root {
     --bg: #F6F5F1;
@@ -99,7 +99,7 @@
   table.tally thead th { font-size: 14px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line-strong); }
   table.tally td.qty, table.tally th.qty { text-align: right; white-space: nowrap; width: 1%; padding-left: 12px; }
   table.tally td.qty .n { font-size: 20px; font-weight: 700; }
-  table.tally td.qty .sub { display: block; font-size: 13px; color: var(--warn-ink); white-space: normal; }
+  table.tally td.qty .sub { display: block; font-size: 13px; color: var(--warn-ink); white-space: nowrap; }
   table.tally tr.zero td { color: var(--faint); }
   table.tally tr.zero td.qty .n { font-weight: 400; }
   .empty { color: var(--muted); }
@@ -121,7 +121,7 @@
   .chk input { width: 24px; height: 24px; margin: 0; cursor: pointer; accent-color: var(--accent); }
   .chk .box-print { display: none; }
   @media (min-width: 880px) {
-    .hrow { grid-template-columns: 10em 9em minmax(0, 1fr) 64px; grid-template-areas: "time name items chk"; }
+    .hrow { grid-template-columns: 6em 10em minmax(0, 1fr) 64px; grid-template-areas: "time name items chk"; }
     .hhead { display: grid; font-size: 14px; color: var(--muted); font-weight: 600; padding: 6px 0; }
     .hhead .h-chk { text-align: center; }
   }
@@ -143,13 +143,14 @@
   .efields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 8px; }
   @media (min-width: 560px) { .efields { grid-template-columns: minmax(0, 1fr) minmax(0, 12em); } }
   .efields label { font-size: 14px; font-weight: 600; display: block; }
-  .irow { display: grid; grid-template-columns: minmax(0, 1fr) 6.5em auto; grid-template-areas: "sel qty del";
+  .irow { display: grid; grid-template-columns: minmax(0, 1fr) 6.5em auto; grid-template-areas: "sel qty del" "name name name";
     gap: 8px; align-items: center; margin: 0 0 8px; }
   .irow select { grid-area: sel; min-width: 0; }
   .irow input { grid-area: qty; }
   .irow .del { grid-area: del; }
+  .irow .selname { grid-area: name; font-size: 13px; color: var(--muted); }
   @media (max-width: 479px) {
-    .irow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "sel sel" "qty del"; }
+    .irow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "sel sel" "name name" "qty del"; }
   }
   .ilabel { font-size: 14px; font-weight: 600; margin: 4px 0; }
 
@@ -175,7 +176,7 @@
     .panel { border: none; padding: 0; margin: 0 0 12pt; }
     .inputs-panel { display: none !important; }
     #handoverSection { break-before: page; }
-    .hrow { grid-template-columns: 7em 8em minmax(0, 1fr) 2.5em; grid-template-areas: "time name items chk"; break-inside: avoid; padding: 6pt 0; }
+    .hrow { grid-template-columns: 5em 8em minmax(0, 1fr) 2.5em; grid-template-areas: "time name items chk"; break-inside: avoid; padding: 6pt 0; }
     .hhead { display: grid; }
     .chk input { display: none; }
     .chk .box-print { display: inline-block; width: 14pt; height: 14pt; border: 1.5pt solid #000; }
@@ -189,6 +190,7 @@
   <header>
     <h1>予約注文まとめ表</h1>
     <p class="lead">届いた注文の文章をまとめて貼ると、作る個数と受け渡しの一覧が出ます。</p>
+    <p class="note">数・時刻・名前は、決まった書き方のところだけを読み取ります。作る前に、確認欄で原文と照らし合わせてください。</p>
     <p class="note">貼り付けた文章はこのブラウザの中だけで処理し、送信しません。共用のパソコン・スマホでは、使い終わったら「この端末の記録をすべて消す」を押してください。</p>
     <p class="storage-warn" id="storageWarn" hidden>この端末には保存されません。再読み込みすると、入力と受け取りチェックが消えます。</p>
   </header>
@@ -198,21 +200,23 @@
     <p id="printWarn"></p>
   </div>
 
-  <div class="top row-gap">
+  <section class="panel inputs-panel no-print row-gap" aria-labelledby="setTitle">
+    <h2 id="setTitle">販売日と品目</h2>
+    <label class="field" for="saleDate">販売日（受け渡し日）</label>
+    <input type="date" id="saleDate">
+
+    <details id="itemsBox" class="row-gap">
+      <summary>品目リスト（<span id="itemCount">0</span>品目）</summary>
+      <p class="hint">1行に1品目。同じ品目の別の書き方は「/」で区切って並べます（例: 食パン / しょくぱん / 角食）。最大30品目。この順に製造数を並べます。</p>
+      <textarea id="itemsText" rows="7" spellcheck="false" aria-label="品目リスト"></textarea>
+    </details>
+  </section>
+
+  <div class="top">
     <section class="panel inputs-panel no-print" aria-labelledby="inTitle">
-      <h2 id="inTitle">注文を貼り付ける</h2>
-      <label class="field" for="saleDate">販売日（受け渡し日）</label>
-      <input type="date" id="saleDate">
-
-      <details id="itemsBox" class="row-gap">
-        <summary>品目リスト（<span id="itemCount">0</span>品目）</summary>
-        <p class="hint">1行に1品目。同じ品目の別の書き方は「/」で区切って並べます（例: 食パン / しょくぱん / 角食）。最大30品目。この順に製造数を並べます。</p>
-        <textarea id="itemsText" rows="7" spellcheck="false" aria-label="品目リスト"></textarea>
-      </details>
-
-      <label class="field row-gap" for="orders">届いた注文の文章</label>
+      <h2 id="inTitle"><label for="orders">届いた注文の文章を貼り付ける</label></h2>
       <p class="hint">1件の注文ごとに、空いた行を1行はさんで貼ってください。最大100件・20,000字。</p>
-      <textarea id="orders" rows="10" maxlength="20000" spellcheck="false"></textarea>
+      <textarea id="orders" rows="10" spellcheck="false"></textarea>
 
       <div class="row-gap">
         <button type="button" class="btn primary" id="runBtn">まとめる</button>
@@ -287,15 +291,15 @@
   ];
   var RE_UNKNOWN = /いつもの|前回と同じ|前回同様|おまかせ|お任せ|家族分/;
   var RE_CHANGE = /キャンセル|取り消|取消|変更|やっぱり|減らして|増やして/;
-  var RE_VAGUE_TIME = /朝|夕方|お昼|昼頃|昼ごろ|開店|閉店|午前中|夜/;
+  var RE_LEFT_NUM = /\d|ひとつ|ふたつ|みっつ|よっつ|いつつ|むっつ|ななつ|やっつ|ここのつ|[一二三四五六七八九十][つ個本斤枚袋箱]/;
   var RE_RELATIVE_DAY = /明日|あした|明後日|あさって|今週末/;
 
-  var NUM_SRC = '(\\d{1,3}|ひとつ|ふたつ|みっつ|よっつ|いつつ|むっつ|ななつ|やっつ|ここのつ|とお|十|[一二三四五六七八九])';
+  var NUM_SRC = '(\\d{1,3}|ひとつ|ふたつ|みっつ|よっつ|いつつ|むっつ|ななつ|やっつ|ここのつ|とお(?![ぁ-んァ-ヶ\\u4E00-\\u9FFF])|十|[一二三四五六七八九])';
   var UNIT_SRC = '(個|つ|本|斤|枚|袋|箱|セット|コ)';
   // 品目の後ろの数: 間は空白・「を」「が」「は」のみ。× x X * を許可
   var RE_AFTER = new RegExp('^\\s*(?:[をがは]\\s*)?(?:[×xX*]\\s*)?' + NUM_SRC + '(?![\\d:時分月日/.])\\s*' + UNIT_SRC + '?(\\s*ずつ)?');
   // 品目の前の数: 間は「の」か空白のみ
-  var RE_BEFORE = new RegExp('(^|[^\\d])' + NUM_SRC + '\\s*' + UNIT_SRC + '?\\s*の?\\s*$');
+  var RE_BEFORE = new RegExp('(^|[^\\d:/.時分月])' + NUM_SRC + '\\s*' + UNIT_SRC + '?\\s*の?\\s*$');
   var KANA_NUM = { 'ひとつ': 1, 'ふたつ': 2, 'みっつ': 3, 'よっつ': 4, 'いつつ': 5, 'むっつ': 6, 'ななつ': 7, 'やっつ': 8, 'ここのつ': 9, 'とお': 10,
     '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
 
@@ -360,7 +364,10 @@
   function normalizeWithMap(raw) {
     var out = '', map = [], i = 0;
     while (i < raw.length) {
-      var cp = raw.codePointAt(i), ch = String.fromCodePoint(cp), n = ch.normalize('NFKC');
+      var cp = raw.codePointAt(i), ch = String.fromCodePoint(cp);
+      var nx = raw.charCodeAt(i + ch.length);
+      if (nx === 0xFF9E || nx === 0xFF9F) { ch += raw[i + ch.length]; }
+      var n = ch.normalize('NFKC');
       for (var k = 0; k < n.length; k++) { out += n[k]; map.push(i); }
       i += ch.length;
     }
@@ -387,7 +394,7 @@
     var items = [], aliases = [], seen = {};
     text.replace(/\r\n?/g, '\n').split('\n').forEach(function (line) {
       if (items.length >= MAX_ITEMS) { return; }
-      var names = line.split('/').map(function (s) { return s.normalize('NFKC').trim(); }).filter(Boolean);
+      var names = line.normalize('NFKC').split('/').map(function (s) { return s.trim(); }).filter(Boolean);
       if (!names.length) { return; }
       var idx = items.length;
       items.push({ name: names[0] });
@@ -414,7 +421,7 @@
     function mark(line, s, e) { if (e > s) { line.spans.push([s, e]); } }
 
     var entries = [];
-    var name = '', time = '', vague = false;
+    var name = '', time = '';
 
     lines.forEach(function (L, li) {
       var text = L.norm, cmp = L.cmp;
@@ -479,16 +486,18 @@
       }
 
       // 時刻
-      var tm = /(午前|午後)?\s*(\d{1,2})(?::(\d{2})|時(?:(半)|(\d{1,2})分)?)(頃|ごろ|くらい|ぐらい)?/.exec(text);
-      if (tm) {
+      var reT = /(午前|午後)?\s*(\d{1,2})(?::(\d{2})|時(?:(半)|(\d{1,2})分)?)(頃|ごろ|くらい|ぐらい)?/g, tm;
+      var pmWord = /夕方|夜|午後/.test(text);
+      while ((tm = reT.exec(text))) {
         var h = parseInt(tm[2], 10), mi = tm[3] ? parseInt(tm[3], 10) : (tm[4] ? 30 : (tm[5] ? parseInt(tm[5], 10) : 0));
+        if (h > 23 || mi > 59) { continue; }
         if (tm[1] === '午後' && h < 12) { h += 12; }
-        if (h <= 23 && mi <= 59) {
-          if (!time) { time = pad2(h) + ':' + pad2(mi); }
-          mark(L, tm.index, tm.index + tm[0].length);
-        }
+        else if (!tm[1] && pmWord && h >= 1 && h < 12) { h += 12; }
+        else if (!tm[1] && h >= 1 && h <= 7) { addReason('午前か午後か確認してください（' + h + '時）'); }
+        var tv = pad2(h) + ':' + pad2(mi);
+        if (!time) { time = tv; } else if (time !== tv) { addReason('時刻が複数あります（最初の時刻を使いました）'); }
+        mark(L, tm.index, tm.index + tm[0].length);
       }
-      if (RE_VAGUE_TIME.test(text)) { vague = true; }
 
       // 日付の食い違い
       checkDates(L, saleISO, addReason, mark);
@@ -497,20 +506,31 @@
       if (RE_CHANGE.test(text)) { addReason('変更・取消の文言があります（自動では反映しません）'); }
       if (RE_RELATIVE_DAY.test(text)) { addReason('「明日」などは日付を決められません'); }
 
-      if (L.spans.length) { L.kind = 'used'; }
+      if (L.spans.length) {
+        L.kind = 'used';
+        // 使った部分の外に数が残っていたら要確認（未登録の品目・読めない書き方）
+        var covered = [];
+        L.spans.forEach(function (sp) { for (var k = sp[0]; k < sp[1]; k++) { covered[k] = true; } });
+        var rest = '';
+        for (var k2 = 0; k2 < text.length; k2++) { rest += covered[k2] ? ' ' : text[k2]; }
+        if (!RE_UNKNOWN.test(text) && RE_LEFT_NUM.test(rest)) { addReason('読み取らなかった数があります（品目リストにない品目かもしれません）'); }
+      }
       else if (isGreeting(text)) { L.kind = 'greet'; }
     });
 
     if (!time) { addReason('時刻を読み取れませんでした'); }
     var unused = lines.filter(function (L) { return L.kind === 'unused'; }).length;
     if (unused) { addReason('使わなかった行があります（' + unused + '行）'); }
-    void vague;
 
-    // 同じ品目の重複はまとめる
+    // 同じ品目の重複は合計し、要確認にする
     var merged = [];
     entries.forEach(function (en) {
       var f = merged.filter(function (x) { return x.idx === en.idx; })[0];
-      if (f) { f.qty = Math.min(99, f.qty + en.qty); } else { merged.push({ idx: en.idx, qty: en.qty }); }
+      if (f) {
+        addReason('同じ品目が2回書かれています（合計しました）');
+        f.qty += en.qty;
+        if (f.qty > 99) { f.qty = 99; addReason('数が範囲外です（1〜99で読み取ります）'); }
+      } else { merged.push({ idx: en.idx, qty: en.qty }); }
     });
 
     return { lines: lines, name: name, time: time, items: merged, reasons: reasons };
@@ -527,6 +547,7 @@
     var k = toKata(s);
     for (var a = 0; a < cat.aliases.length; a++) { if (cat.aliases[a].key && k.indexOf(cat.aliases[a].key) >= 0) { return ''; } }
     if (/^(こんにちは|こんばんは|おはよう|よろしく|お願い|いつも)/.test(s)) { return ''; }
+    if (/予約|注文|追加|お願い|したい|受け取|受取|確認|以上|よろしく|ありがと/.test(s)) { return ''; }
     return s;
   }
   function isGreeting(text) {
@@ -650,7 +671,7 @@
     html += '<table class="tally"><thead><tr><th scope="col">品目</th><th scope="col" class="qty">合計</th></tr></thead><tbody>';
     state.cat.items.forEach(function (it, i) {
       var r = t[i];
-      html += '<tr' + (r.total ? '' : ' class="zero"') + '><td>' + esc(it.name) + '</td><td class="qty"><span class="n">' + r.total + '</span>' +
+      html += '<tr' + (r.total ? '' : ' class="zero"') + '><td>' + esc(it.name) + '</td><td class="qty"><span class="n">' + esc(r.total) + '</span>' +
         (r.flagged ? '<span class="sub">（うち要確認' + r.flagged + '）</span>' : '') + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -658,13 +679,13 @@
 
     var done = state.orders.filter(function (o) { return state.checks[o.key]; }).length;
     var d = fmtDate($('saleDate').value);
-    var h = '<p class="summary">' + esc(d) + '　受け取り済み ' + done + '／' + n + '件</p>';
+    var h = '<p class="summary">販売日 ' + esc(d) + '　受け取り済み ' + done + '／' + n + '件</p>';
     h += '<div class="hlist" role="list">';
-    h += '<div class="hrow hhead" aria-hidden="true"><span class="h-time">日時</span><span class="h-name">名前</span><span class="h-items">品目</span><span class="h-chk">済</span></div>';
+    h += '<div class="hrow hhead" aria-hidden="true"><span class="h-time">時刻</span><span class="h-name">名前</span><span class="h-items">品目</span><span class="h-chk">済</span></div>';
     sortedByTime(state.orders).forEach(function (o) {
       var id = 'chk-' + o.no, on = !!state.checks[o.key];
       h += '<div class="hrow' + (on ? ' done' : '') + '" role="listitem" data-key="' + esc(o.key) + '">' +
-        '<span class="h-time">' + (o.time ? esc(d + ' ' + o.time) : esc(d) + ' 時刻未定') + '</span>' +
+        '<span class="h-time">' + (o.time ? esc(o.time) : '時刻未定') + '</span>' +
         '<span class="h-name">' + esc(o.name) + (isFlagged(o) ? ' <span class="badge">要確認</span>' : '') + '</span>' +
         '<span class="h-items">' + (o.items.length ? esc(itemsLabel(o)) : '（品目なし）') + '</span>' +
         '<label class="chk h-chk" for="' + id + '"><input type="checkbox" id="' + id + '" data-no="' + o.no + '"' + (on ? ' checked' : '') +
@@ -683,6 +704,7 @@
     var used = [];
     L.spans.forEach(function (sp) {
       var a = L.map[sp[0]], b = L.map[sp[1] - 1];
+      var c0 = L.raw.charCodeAt(b); if (c0 >= 0xD800 && c0 <= 0xDBFF) { b++; }
       for (var k = a; k <= b && k < L.raw.length; k++) { used[k] = true; }
     });
     var out = '', cur = null, buf = '';
@@ -720,7 +742,8 @@
       o.items.forEach(function (it, j) {
         c += '<div class="irow">' +
           '<select data-f="item" data-j="' + j + '" aria-label="品目' + (j + 1) + '">' + itemOptions(it.idx) + '</select>' +
-          '<input type="number" inputmode="numeric" min="1" max="99" data-f="qty" data-j="' + j + '" value="' + it.qty + '" aria-label="品目' + (j + 1) + 'の数">' +
+          '<span class="selname" data-j="' + j + '"' + (state.cat.items[it.idx].name.length > 10 ? '' : ' hidden') + '>' + esc(state.cat.items[it.idx].name) + '</span>' +
+          '<input type="number" inputmode="numeric" min="1" max="99" data-f="qty" data-j="' + j + '" value="' + esc(it.qty) + '" aria-label="品目' + (j + 1) + 'の数">' +
           '<button type="button" class="btn small del" data-act="del" data-j="' + j + '">削除</button></div>';
       });
       c += '<button type="button" class="btn small" data-act="add">品目を追加</button>';
@@ -761,6 +784,8 @@
     var o = orderByNo(+card.getAttribute('data-no')); if (!o) { return; }
     if (el.getAttribute('data-f') === 'item') {
       o.items[+el.getAttribute('data-j')].idx = +el.value;
+      var sn = card.querySelector('.selname[data-j="' + el.getAttribute('data-j') + '"]');
+      if (sn) { sn.textContent = state.cat.items[+el.value].name; sn.hidden = sn.textContent.length <= 10; }
       recordEdit(o); renderTables();
     }
   });
@@ -787,6 +812,7 @@
   });
 
   $('runBtn').addEventListener('click', function () { run(false); });
+  $('saleDate').addEventListener('change', function () { if (state.parsed) { run(false); } });
   $('sampleBtn').addEventListener('click', function () {
     $('saleDate').value = '2026-10-03';
     $('itemsText').value = SAMPLE_ITEMS;
@@ -842,6 +868,7 @@
   });
   $('clearBtn').addEventListener('click', function () {
     if (!window.confirm('この端末に保存した入力・確認欄の手直し・受け取りチェックをすべて消します。よろしいですか？')) { return; }
+    clearTimeout(saveTimer);
     try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
     state = { parsed: false, cat: null, orders: [], edits: {}, checks: {} };
     $('saleDate').value = tomorrowISO(); $('itemsText').value = ''; $('orders').value = '';
@@ -854,17 +881,49 @@
     $('clearMsg').textContent = 'この端末の記録を消しました。';
   });
 
+  function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+  function sanitizeEdits(ed) {
+    var out = {};
+    if (!isObj(ed)) { return out; }
+    Object.keys(ed).forEach(function (k) {
+      var e = ed[k];
+      if (!isObj(e) || typeof e.name !== 'string' || !Array.isArray(e.items)) { return; }
+      var time = (typeof e.time === 'string' && /^\d{2}:\d{2}$/.test(e.time)) ? e.time : '';
+      var items = [];
+      e.items.forEach(function (it) {
+        if (!isObj(it) || typeof it.name !== 'string') { return; }
+        var q = Number(it.qty);
+        if (Math.floor(q) === q && q >= 1 && q <= 99) { items.push({ name: it.name, qty: q }); }
+      });
+      out[k] = { name: e.name.slice(0, 20), time: time, confirmed: e.confirmed === true, items: items };
+    });
+    return out;
+  }
+  function sanitizeChecks(ch) {
+    var out = {};
+    if (!isObj(ch)) { return out; }
+    Object.keys(ch).forEach(function (k) { if (ch[k] === true) { out[k] = true; } });
+    return out;
+  }
+
   /* ---------- 起動 ---------- */
   if (IS_IOS) { $('iosNote').hidden = false; }
   if (!storageOK) { $('storageWarn').hidden = false; }
   var saved = loadStore();
   if (saved && saved.v === 1) {
-    $('saleDate').value = saved.date || tomorrowISO();
-    $('itemsText').value = saved.itemsText || '';
-    $('orders').value = saved.ordersText || '';
-    state.edits = saved.edits || {};
-    state.checks = saved.checks || {};
-    if (saved.parsed) { run(true); }
+    $('saleDate').value = (typeof saved.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(saved.date)) ? saved.date : tomorrowISO();
+    $('itemsText').value = typeof saved.itemsText === 'string' ? saved.itemsText : '';
+    $('orders').value = typeof saved.ordersText === 'string' ? saved.ordersText : '';
+    state.edits = sanitizeEdits(saved.edits);
+    state.checks = sanitizeChecks(saved.checks);
+    if (saved.parsed) {
+      try { run(true); }
+      catch (e) {
+        state.edits = {}; state.checks = {};
+        try { run(true); } catch (e2) { /* noop */ }
+        $('runMsg').textContent = '保存データを読み込めなかったため、確認欄の手直しと受け取りチェックを初期化しました。';
+      }
+    }
   } else {
     $('saleDate').value = tomorrowISO();
   }
